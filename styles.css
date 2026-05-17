@@ -360,6 +360,16 @@ body {
 }
 .panel-header h2 { font-size: 1.35rem; }
 
+.publish-status {
+  font-size: 0.78rem;
+  font-family: Consolas, monospace;
+  margin-left: auto;
+  padding-right: 1rem;
+}
+.publish-status.syncing   { color: var(--text-muted); }
+.publish-status.published { color: var(--success); }
+.publish-status.error     { color: var(--danger); }
+
 .panel-close {
   background: none;
   border: none;

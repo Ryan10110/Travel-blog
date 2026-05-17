@@ -232,6 +232,7 @@ function renderPostPanel(editingId) {
     saveEntries(window.blogEntries);
     renderEntries();
     renderPostPanel(null);
+    publishToGitHub();
   });
 
   if (editing) {
@@ -249,6 +250,7 @@ function renderPostPanel(editingId) {
       saveEntries(window.blogEntries);
       renderEntries();
       renderPostPanel(null);
+      publishToGitHub();
     });
   });
 
@@ -307,6 +309,54 @@ function openAnalyticsPanel() {
       `).join("")}
     </ul>
   `;
+}
+
+// ── GitHub auto-publish ───────────────────────────────────
+function setPublishStatus(state) {
+  const el = document.getElementById("publish-status");
+  if (!el) return;
+  el.className = "publish-status " + state;
+  const labels = {
+    syncing:   "⏳ Publishing...",
+    published: "✓ Live in ~60s",
+    error:     "⚠ Publish failed — check token in config.js",
+  };
+  el.textContent = labels[state] ?? "";
+}
+
+async function publishToGitHub() {
+  if (!GITHUB_TOKEN || !GITHUB_REPO) return;
+  setPublishStatus("syncing");
+  try {
+    const apiBase = `https://api.github.com/repos/${GITHUB_REPO}/contents/entries.js`;
+    const headers = {
+      Authorization: `token ${GITHUB_TOKEN}`,
+      Accept: "application/vnd.github+json",
+      "Content-Type": "application/json",
+    };
+
+    // Fetch current file SHA (required by GitHub API to update a file)
+    const getRes = await fetch(apiBase, { headers });
+    if (!getRes.ok) throw new Error(`GET ${getRes.status}`);
+    const { sha } = await getRes.json();
+
+    // Encode updated entries.js as base64
+    const clean  = window.blogEntries.map(({ _id, ...rest }) => rest);
+    const js     = `const entries = ${JSON.stringify(clean, null, 2)};\n`;
+    const b64    = btoa(unescape(encodeURIComponent(js)));
+
+    // Commit
+    const putRes = await fetch(apiBase, {
+      method: "PUT",
+      headers,
+      body: JSON.stringify({ message: "Update blog entries", content: b64, sha }),
+    });
+    if (!putRes.ok) throw new Error(`PUT ${putRes.status}`);
+    setPublishStatus("published");
+  } catch (err) {
+    console.error("GitHub publish error:", err);
+    setPublishStatus("error");
+  }
 }
 
 // ── Panel close buttons ───────────────────────────────────

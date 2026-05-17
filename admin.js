@@ -1,7 +1,15 @@
 // ── Change this to your preferred password ───────────────
 const ADMIN_PASSWORD = "travel";
 
-const STORAGE_KEY = "blog_entries";
+const STORAGE_KEY    = "blog_entries";
+const GH_TOKEN_KEY   = "gh_publish_token"; // stored in localStorage, never in the repo
+
+function getGithubToken() {
+  return localStorage.getItem(GH_TOKEN_KEY) || GITHUB_TOKEN || "";
+}
+function setGithubToken(t) {
+  localStorage.setItem(GH_TOKEN_KEY, t.trim());
+}
 
 // ── Data ─────────────────────────────────────────────────
 function loadEntries() {
@@ -200,9 +208,23 @@ function renderPostPanel(editingId) {
   }
   html += `</div>`;
 
+  const savedToken = getGithubToken();
   html += `
     <div class="export-section">
       <button id="export-btn" class="btn-secondary">Export entries.js</button>
+    </div>
+    <div class="github-token-section">
+      <h3>GitHub Auto-Publish</h3>
+      <p class="github-token-hint">Paste your fine-grained token (Contents: read+write) once — it's saved in this browser only, never uploaded.</p>
+      <div class="github-token-row">
+        <input type="password" id="gh-token-input" placeholder="github_pat_..."
+          value="${savedToken ? "••••••••••••••••" : ""}" autocomplete="off" />
+        <button id="gh-token-save" class="btn-primary">Save</button>
+        ${savedToken ? '<button id="gh-token-clear" class="btn-secondary">Clear</button>' : ""}
+      </div>
+      <p id="gh-token-status" class="github-token-status ${savedToken ? "saved" : ""}">
+        ${savedToken ? "✓ Token saved in this browser" : ""}
+      </p>
     </div>
   `;
 
@@ -252,6 +274,17 @@ function renderPostPanel(editingId) {
       renderPostPanel(null);
       publishToGitHub();
     });
+  });
+
+  document.getElementById("gh-token-save").addEventListener("click", () => {
+    const val = document.getElementById("gh-token-input").value.trim();
+    if (!val || val.startsWith("•")) return;
+    setGithubToken(val);
+    renderPostPanel(null); // re-render to show saved state
+  });
+  document.getElementById("gh-token-clear")?.addEventListener("click", () => {
+    localStorage.removeItem(GH_TOKEN_KEY);
+    renderPostPanel(null);
   });
 
   document.getElementById("export-btn").addEventListener("click", () => {
@@ -325,7 +358,8 @@ function setPublishStatus(state) {
 }
 
 async function publishToGitHub() {
-  if (!GITHUB_TOKEN || !GITHUB_REPO) return;
+  const token = getGithubToken();
+  if (!token || !GITHUB_REPO) return;
   setPublishStatus("syncing");
   try {
     const apiBase = `https://api.github.com/repos/${GITHUB_REPO}/contents/entries.js`;
@@ -336,7 +370,7 @@ async function publishToGitHub() {
     };
 
     // Fetch current file SHA (required by GitHub API to update a file)
-    const getRes = await fetch(apiBase, { headers });
+    const getRes = await fetch(apiBase, { headers: { ...headers, Authorization: `token ${token}` } });
     if (!getRes.ok) throw new Error(`GET ${getRes.status}`);
     const { sha } = await getRes.json();
 
@@ -348,7 +382,7 @@ async function publishToGitHub() {
     // Commit
     const putRes = await fetch(apiBase, {
       method: "PUT",
-      headers,
+      headers: { ...headers, Authorization: `token ${token}` },
       body: JSON.stringify({ message: "Update blog entries", content: b64, sha }),
     });
     if (!putRes.ok) throw new Error(`PUT ${putRes.status}`);

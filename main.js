@@ -27,7 +27,7 @@ const hero = document.querySelector(".hero");
 const heroHeight = () => hero.offsetHeight;
 
 window.addEventListener("scroll", () => {
-  const progress = Math.min(window.scrollY / (heroHeight() * 0.65), 1);
+  const progress = Math.min(window.scrollY / (heroHeight() * 0.25), 1);
   hero.style.opacity = 1 - progress;
 }, { passive: true });
 

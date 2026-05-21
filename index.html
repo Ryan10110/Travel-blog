@@ -55,6 +55,16 @@
     </div>
   </div>
 
+  <!-- Trips panel -->
+  <div id="trips-panel" class="panel hidden">
+    <div class="panel-header">
+      <h2>Trips</h2>
+      <span id="trips-publish-status" class="publish-status"></span>
+      <button class="panel-close" data-panel="trips-panel" aria-label="Close">&#x2715;</button>
+    </div>
+    <div id="trips-panel-body" class="panel-body"></div>
+  </div>
+
   <!-- Post panel -->
   <div id="post-panel" class="panel hidden">
     <div class="panel-header">
@@ -78,7 +88,7 @@
   <section class="hero">
     <div class="hero-content">
       <h1>Ryan's Travel Blog</h1>
-      <p class="tagline">Follow along on my strangely combined travel-web development experience.</p>
+      <p class="tagline">Welcome to my vibe-coded nerd project.</p>
     </div>
     <div class="hero-fade-bottom"></div>
   </section>
@@ -86,6 +96,7 @@
   <main>
     <section class="map-section">
       <div id="world-map"></div>
+      <p id="map-caption" class="map-caption"></p>
     </section>
 
     <section class="summary-section" id="summary-section">
@@ -109,6 +120,7 @@
 
   <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
   <script src="entries.js"></script>
+  <script src="trips.js"></script>
   <script src="admin.js"></script>
   <script src="main.js"></script>
 </body>

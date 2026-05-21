@@ -14,7 +14,6 @@ if (gate && gate.style.display !== "none") {
     } else {
       gatePwd.value = "";
       gateErr.classList.remove("hidden");
-      // Re-trigger shake animation
       gateErr.style.animation = "none";
       gateErr.offsetHeight;
       gateErr.style.animation = "";
@@ -50,6 +49,9 @@ let markerLayer = null;
 let journeyLine = null;
 let arrowLayer  = null;
 
+// Which trip folder is currently open (null = all pins shown)
+window.openTripId = null;
+
 function getBearing(from, to) {
   const φ1 = from[0] * Math.PI / 180;
   const φ2 = to[0]   * Math.PI / 180;
@@ -59,35 +61,60 @@ function getBearing(from, to) {
   return (Math.atan2(y, x) * 180 / Math.PI + 360) % 360;
 }
 
+// The map shows exactly one trip: an open folder, else the current trip, else nothing.
+function activeMapTripId() {
+  if (window.openTripId != null) return window.openTripId;
+  const current = (window.blogTrips ?? []).find(t => t.isCurrent);
+  return current ? current._id : null;
+}
+
+function updateMapCaption() {
+  const cap = document.getElementById("map-caption");
+  if (!cap) return;
+  const trips = window.blogTrips ?? [];
+
+  if (window.openTripId != null) {
+    const t = trips.find(tr => tr._id === window.openTripId);
+    cap.textContent = t ? `Viewing past trip: ${t.name}` : "";
+    cap.className = "map-caption viewing";
+    return;
+  }
+  const current = trips.find(t => t.isCurrent);
+  if (current) {
+    cap.textContent = `Currently traveling: ${current.name}`;
+    cap.className = "map-caption current";
+  } else {
+    cap.textContent = "Not currently traveling";
+    cap.className = "map-caption inactive";
+  }
+}
+
 function renderMapMarkers() {
   if (markerLayer) { map.removeLayer(markerLayer); markerLayer = null; }
   if (journeyLine) { map.removeLayer(journeyLine); journeyLine = null; }
   if (arrowLayer)  { map.removeLayer(arrowLayer);  arrowLayer  = null; }
 
-  const valid = (window.blogEntries ?? []).filter(
-    e => isFinite(e.latitude) && isFinite(e.longitude)
-  );
-  if (!valid.length) return;
+  updateMapCaption();
 
-  const sorted = [...valid].sort((a, b) => a.date.localeCompare(b.date));
+  const tripId = activeMapTripId();
+  if (tripId == null) { map.setView([20, 0], 2); return; } // empty map → world view
+
+  const pool = (window.blogEntries ?? []).filter(
+    e => isFinite(e.latitude) && isFinite(e.longitude) && e.tripId === tripId
+  );
+  if (!pool.length) { map.setView([20, 0], 2); return; }
+
+  const sorted = [...pool].sort((a, b) => a.date.localeCompare(b.date));
   const coords = sorted.map(e => [e.latitude, e.longitude]);
 
-  // Dashed journey path
   journeyLine = L.polyline(coords, {
-    color: "#4da6ff",
-    weight: 1.5,
-    opacity: 0.45,
-    dashArray: "5 9",
+    color: "#4da6ff", weight: 1.5, opacity: 0.45, dashArray: "5 9",
   }).addTo(map);
 
-  // Chevron arrow at the midpoint of each segment
   const arrows = [];
   for (let i = 0; i < coords.length - 1; i++) {
-    const from = coords[i];
-    const to   = coords[i + 1];
-    const mid  = [(from[0] + to[0]) / 2, (from[1] + to[1]) / 2];
-    const deg  = getBearing(from, to) - 90; // SVG chevron points right; offset to point north at 0°
-
+    const deg = getBearing(coords[i], coords[i + 1]) - 90;
+    const mid = [(coords[i][0] + coords[i+1][0]) / 2, (coords[i][1] + coords[i+1][1]) / 2];
     const icon = L.divIcon({
       className: "",
       html: `<svg width="12" height="12" viewBox="0 0 12 12"
@@ -96,75 +123,161 @@ function renderMapMarkers() {
                  fill="none" stroke="#4da6ff" stroke-width="1.5"
                  stroke-opacity="0.5" stroke-linecap="round" stroke-linejoin="round"/>
              </svg>`,
-      iconSize:   [12, 12],
-      iconAnchor: [6, 6],
+      iconSize: [12, 12], iconAnchor: [6, 6],
     });
     arrows.push(L.marker(mid, { icon, interactive: false }));
   }
   arrowLayer = L.layerGroup(arrows).addTo(map);
 
-  // Circle pin per entry
   const markers = sorted.map(e =>
     L.circleMarker([e.latitude, e.longitude], {
-      radius: 6,
-      fillColor: "#4da6ff",
-      color: "#ffffff",
-      weight: 1.5,
-      opacity: 1,
-      fillOpacity: 0.88,
+      radius: 6, fillColor: "#4da6ff", color: "#ffffff",
+      weight: 1.5, opacity: 1, fillOpacity: 0.88,
     }).bindPopup(
       `<strong style="font-family:Consolas,monospace">${e.location}</strong><br>
        <span style="color:#8a95a8;font-size:0.8em">${e.date}</span>`
     )
   );
-
   markerLayer = L.layerGroup(markers).addTo(map);
+
+  // Zoom the map to frame the selected trip's pins
+  if (coords.length === 1) {
+    map.setView(coords[0], 11);
+  } else {
+    map.fitBounds(coords, { padding: [30, 30], maxZoom: 13 });
+  }
 }
 
-// ── Entry rendering ───────────────────────────────────────
+// ── Trip folder toggle ────────────────────────────────────
+window.toggleTripFolder = function(tripId) {
+  const isOpen = window.openTripId === tripId;
+  window.openTripId = isOpen ? null : tripId;
+
+  // Update all folder states without full re-render
+  document.querySelectorAll(".trip-folder").forEach(folder => {
+    const fid = parseInt(folder.dataset.tripId);
+    const open = fid === window.openTripId;
+    folder.querySelector(".trip-folder-body").classList.toggle("hidden", !open);
+    folder.querySelector(".trip-folder-arrow").textContent = open ? "▼" : "▶";
+  });
+
+  renderMapMarkers();
+};
+
+// ── Entry / trip rendering ────────────────────────────────
 function formatDate(iso) {
   const d = new Date(iso + "T00:00:00");
   if (isNaN(d)) return iso;
   return d.toLocaleDateString(undefined, { year: "numeric", month: "long", day: "numeric" });
 }
-
 function formatCoords(lat, lng) {
   const latStr = `${Math.abs(lat).toFixed(4)}° ${lat >= 0 ? "N" : "S"}`;
   const lngStr = `${Math.abs(lng).toFixed(4)}° ${lng >= 0 ? "E" : "W"}`;
   return `${latStr}, ${lngStr}`;
 }
 
-function renderEntries() {
-  if (typeof renderMapMarkers  === "function") renderMapMarkers();
-  if (typeof renderSummary     === "function") renderSummary();
-  const container = document.getElementById("entries");
-  const list = window.blogEntries ?? [];
+function makeEntryCard(e) {
+  const article = document.createElement("article");
+  article.className = "entry";
+  article.innerHTML = `
+    <div class="entry-header">
+      <span class="entry-location"></span>
+      <span class="entry-date"></span>
+    </div>
+    <div class="entry-coords"></div>
+    <p class="entry-notes"></p>
+  `;
+  article.querySelector(".entry-location").textContent = e.location;
+  article.querySelector(".entry-date").textContent     = formatDate(e.date);
+  article.querySelector(".entry-coords").textContent   = formatCoords(e.latitude, e.longitude);
+  article.querySelector(".entry-notes").textContent    = e.notes;
+  return article;
+}
 
-  if (!list.length) {
+function renderEntries() {
+  const allEntries = window.blogEntries ?? [];
+  const allTrips   = window.blogTrips   ?? [];
+
+  // Reset a stale open folder (its trip may have been deleted)
+  if (window.openTripId != null && !allTrips.some(t => t._id === window.openTripId)) {
+    window.openTripId = null;
+  }
+
+  renderMapMarkers();
+  if (typeof renderSummary === "function") renderSummary();
+
+  const container = document.getElementById("entries");
+
+  if (!allEntries.length) {
     container.innerHTML = '<p class="entries-empty">No entries yet — check back soon.</p>';
     return;
   }
 
-  const sorted = [...list].sort((a, b) => b.date.localeCompare(a.date));
   container.innerHTML = "";
 
-  for (const e of sorted) {
-    const article = document.createElement("article");
-    article.className = "entry";
-    article.innerHTML = `
-      <div class="entry-header">
-        <span class="entry-location"></span>
-        <span class="entry-date"></span>
-      </div>
-      <div class="entry-coords"></div>
-      <p class="entry-notes"></p>
-    `;
-    article.querySelector(".entry-location").textContent = e.location;
-    article.querySelector(".entry-date").textContent = formatDate(e.date);
-    article.querySelector(".entry-coords").textContent = formatCoords(e.latitude, e.longitude);
-    article.querySelector(".entry-notes").textContent = e.notes;
-    container.appendChild(article);
+  const currentTrip = allTrips.find(t => t.isCurrent) ?? null;
+
+  // ── Current trip entries (shown flat at top) ──────────
+  const currentIds = currentTrip
+    ? allEntries.filter(e => e.tripId === currentTrip._id)
+                .sort((a, b) => b.date.localeCompare(a.date))
+    : [];
+
+  if (currentTrip && currentIds.length) {
+    const label = document.createElement("div");
+    label.className = "current-trip-label";
+    label.innerHTML = `<span class="trip-current-badge">current</span> ${escapeHtml(currentTrip.name)}`;
+    container.appendChild(label);
+    currentIds.forEach(e => container.appendChild(makeEntryCard(e)));
   }
+
+  // ── Past trip folders ─────────────────────────────────
+  const pastTrips = allTrips.filter(t => !t.isCurrent);
+  pastTrips.forEach(trip => {
+    const tripEntries = allEntries
+      .filter(e => e.tripId === trip._id)
+      .sort((a, b) => b.date.localeCompare(a.date));
+    if (!tripEntries.length) return;
+
+    const isOpen = window.openTripId === trip._id;
+    const folder = document.createElement("div");
+    folder.className = "trip-folder";
+    folder.dataset.tripId = trip._id;
+
+    folder.innerHTML = `
+      <button class="trip-folder-header" onclick="toggleTripFolder(${trip._id})">
+        <span class="trip-folder-arrow">${isOpen ? "▼" : "▶"}</span>
+        <span class="trip-folder-name">${escapeHtml(trip.name)}</span>
+        <span class="trip-folder-count">${tripEntries.length} post${tripEntries.length !== 1 ? "s" : ""}</span>
+      </button>
+      <div class="trip-folder-body ${isOpen ? "" : "hidden"}"></div>
+    `;
+
+    const body = folder.querySelector(".trip-folder-body");
+    tripEntries.forEach(e => body.appendChild(makeEntryCard(e)));
+    container.appendChild(folder);
+  });
+
+  // ── Unassigned entries ────────────────────────────────
+  const assignedIds = new Set(allEntries.filter(e => e.tripId != null).map(e => e._id));
+  const unassigned  = allEntries
+    .filter(e => !assignedIds.has(e._id))
+    .sort((a, b) => b.date.localeCompare(a.date));
+
+  if (unassigned.length) {
+    if (currentTrip || pastTrips.some(t => allEntries.some(e => e.tripId === t._id))) {
+      const label = document.createElement("div");
+      label.className = "current-trip-label";
+      label.textContent = "Other Posts";
+      container.appendChild(label);
+    }
+    unassigned.forEach(e => container.appendChild(makeEntryCard(e)));
+  }
+}
+
+function escapeHtml(str) {
+  return String(str)
+    .replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
 }
 
 renderEntries();
@@ -182,7 +295,6 @@ async function renderSummary() {
     .sort((a, b) => b.date.localeCompare(a.date))
     .slice(0, 3);
 
-  // Hide the card entirely when there's nothing to summarise
   if (!recent.length) { section.style.display = "none"; return; }
   section.style.display = "";
 
@@ -191,7 +303,6 @@ async function renderSummary() {
     return;
   }
 
-  // Return cached text if the same three entries haven't changed
   const cacheHash = recent.map(e => `${e._id}:${e.date}:${e.notes?.length}`).join("|");
   const cached = localStorage.getItem("summary_hash") === cacheHash
     && localStorage.getItem("summary_text");
@@ -211,9 +322,9 @@ async function renderSummary() {
 
   try {
     const res  = await fetch(`${GEMINI_URL}?key=${GEMINI_API_KEY}`, {
-      method:  "POST",
+      method: "POST",
       headers: { "Content-Type": "application/json" },
-      body:    JSON.stringify({ contents: [{ parts: [{ text: prompt }] }] }),
+      body: JSON.stringify({ contents: [{ parts: [{ text: prompt }] }] }),
     });
     const data = await res.json();
     const text = data.candidates?.[0]?.content?.parts?.[0]?.text?.trim();

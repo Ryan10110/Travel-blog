@@ -9,6 +9,12 @@ if (gate && gate.style.display !== "none") {
     e.preventDefault();
     if (gatePwd.value === SITE_PASSWORD) {
       sessionStorage.setItem("site_auth", "1");
+      // Mobile: dismiss the soft keyboard and reset any scroll the keyboard caused,
+      // otherwise the hero is faded out by the scroll listener and looks blank.
+      gatePwd.blur();
+      window.scrollTo(0, 0);
+      const heroEl = document.querySelector(".hero");
+      if (heroEl) heroEl.style.opacity = "1";
       gate.classList.add("unlocking");
       gate.addEventListener("transitionend", () => gate.remove(), { once: true });
     } else {

@@ -886,7 +886,62 @@ footer {
   margin-top: 2rem;
 }
 
+/* Belt-and-suspenders: never let anything trigger horizontal scroll on phones.
+   Applied to <html> (not <body>) so position:sticky on the hero still works. */
+html { overflow-x: hidden; }
+
 @media (max-width: 600px) {
-  #world-map { height: 300px; }
-  .form-row.two-col { flex-direction: column; }
+  /* Site-wide spacing */
+  main { padding: 1.5rem 1rem; }
+
+  /* Map: pull side padding way in, give the map more vertical room */
+  .map-section { padding: 0 0.75rem; }
+  #world-map    { height: 60vh; min-height: 320px; max-height: 460px; }
+  .map-caption  { font-size: 0.78rem; padding: 0 0.5rem; }
+
+  /* Hero text sits a touch higher so it isn't crowded by the burger button */
+  .hero-content { top: 9vh; padding: 0 1rem; }
+
+  /* Entries section */
+  .entries-section h2  { font-size: 1.4rem; }
+  .entry               { padding: 1.1rem; }
+  .entry-location      { font-size: 1.1rem; }
+  .entry-header        { gap: 0.25rem; }
+
+  /* Trip folders */
+  .trip-folder-header  { padding: 0.7rem 0.9rem; gap: 0.5rem; }
+  .trip-folder-name    { font-size: 0.95rem; }
+  .trip-folder-count   { font-size: 0.75rem; }
+  .trip-folder-body    { margin-left: 0.5rem; padding-left: 0.75rem; }
+  .current-trip-label  { font-size: 0.72rem; }
+
+  /* AI summary card */
+  .summary-card { padding: 1rem 1.1rem; }
+  .summary-text { font-size: 0.9rem; }
+
+  /* Admin panels */
+  .panel-header        { padding: 0.9rem 1rem; gap: 0.5rem; }
+  .panel-header h2     { font-size: 1.1rem; }
+  .panel-body          { padding: 1rem; }
+  .publish-status      { font-size: 0.68rem; padding-right: 0.3rem; }
+
+  /* Forms */
+  .form-row.two-col      { flex-direction: column; gap: 0.6rem; }
+  .post-list-item        { padding: 0.6rem 0.85rem; gap: 0.5rem; }
+  .post-list-location    { font-size: 0.95rem; }
+  .github-token-row      { flex-direction: column; }
+  .github-token-row input,
+  .github-token-row button { width: 100%; }
+
+  /* Trip status banner in admin */
+  .trip-status-banner { font-size: 0.8rem; padding: 0.65rem 0.85rem; }
+
+  /* Drawer takes a bit more width on small phones */
+  #drawer { width: min(280px, 80vw); }
+
+  /* Burger button safe distance from the notch / status bar */
+  #burger-btn { top: 0.75rem; left: 0.75rem; }
+
+  /* Gate stays readable on narrow screens */
+  #gate-box   { max-width: 290px; }
 }

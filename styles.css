@@ -902,6 +902,10 @@ html { overflow-x: hidden; }
   /* Hero text sits a touch higher so it isn't crowded by the burger button */
   .hero-content { top: 9vh; padding: 0 1rem; }
 
+  /* Mobile-only: shift the hero crop left so the train cockpit is centered
+     and the Shard stays visible on the left edge of the frame. */
+  .hero { background-position: 30% center; }
+
   /* Entries section */
   .entries-section h2  { font-size: 1.4rem; }
   .entry               { padding: 1.1rem; }
